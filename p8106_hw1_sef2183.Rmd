@@ -1,0 +1,218 @@
+---
+title: "Homework 1: Predicting the Sale Price of a House Using Characteristics"
+author: "Sarah Forrest"
+date: "2/8/2023"
+output: github_document
+---
+
+```{r, include = FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(glmnet)
+library(caret)
+library(plotmo)
+
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Data
+
+In this exercise, we predict the sale price of a house using its other characteristics. The
+training data are in “housing train.csv”, and the test data are in “housing test.csv”.
+
+```{r}
+# read in test data
+test_data = read.csv("data/housing_test.csv") 
+# read in training data
+train_data = read.csv("data/housing_training.csv")
+```
+
+# (a) Fit a linear model using least squares on the training data
+
+```{r}
+set.seed(1)
+
+# create input objects
+## create input matrix of predictors x for the training data
+train_data_matrix <- model.matrix(Sale_Price ~ ., train_data)[ ,-1]
+x <- train_data_matrix
+## create vector of response y for the training data
+y <- train_data$Sale_Price
+
+## 10-fold cross-validation repeated 5 times
+ctrl1 <- trainControl(method = "repeatedcv", number = 10, repeats = 5)
+```
+
+```{r}
+set.seed(1)
+
+lm_fit <- train(x, y,
+                method = "lm",
+                trControl = ctrl1)
+```
+
+
+# (b) Fit a lasso model on the training data 
+
+Using the caret package: 
+
+```{r}
+set.seed(1)
+
+lasso_fit <- train(x, y,
+                   method = "glmnet",
+                   tuneGrid = expand.grid(alpha = 1,
+                                          lambda = exp(seq(-1, 5, length = 100))),
+                   trControl = ctrl1)
+```
+
+## (bi) Tuning parameter (λ)
+
+```{r}
+lasso_fit$bestTune
+```
+
+The best lambda (λ) value resulting in the minimum MSE according to the caret package is 63.53019.
+
+## (bii) Test error
+
+```{r}
+## create input matrix of predictors x for the test data
+test_data_matrix <- model.matrix(Sale_Price ~ ., test_data)[ ,-1]
+
+lasso_fit_pred <- predict(lasso_fit, newdata = test_data_matrix)
+
+# calculate MSE
+mean((lasso_fit_pred - test_data$Sale_Price)^2)
+# calculate RMSE
+sqrt(mean((lasso_fit_pred - test_data$Sale_Price)^2)) 
+```
+
+The mean-square test error (MSE) for the lasso model is 440,154,088.
+The root-mean-square test error (RMSE) for the lasso model is 20,979.85.
+
+## (biii) Predictors
+
+```{r}
+# 10-fold cross-validation repeated 5 times using 1SE
+ctrl_1se <- trainControl(method = "repeatedcv", selection = "oneSE", number = 10, repeats = 5)
+
+lasso_fit_1se <- train(x, y,
+                   method = "glmnet",
+                   tuneGrid = expand.grid(alpha = 1,
+                                          lambda = exp(seq(-1, 5, length = 100))),
+                   trControl = ctrl_1se)
+
+coef(lasso_fit_1se$finalModel, lasso_fit_1se$bestTune$lambda)
+```
+
+When the 1 standard error (1SE) rule is applied, there are 36 predictors included in the model (not including the intercept). The following coefficients were removed from the model because they had values of 0: second floor square feet (Second_Flr_SF), "good" fireplace quality (Fireplace_QuNo_Fireplace), and no fireplace (Fireplace_QuNo_Fireplace )
+
+
+# (c) Fit an elastic net model on the training data
+
+Using the caret package:
+
+```{r}
+set.seed(1)
+
+enet_fit <- train(x, y,
+                  method = "glmnet",
+                  tuneGrid = expand.grid(alpha = seq(0, 1, length = 21), 
+                                         lambda = exp(seq(2, -2, length = 50))),
+                  trControl = ctrl1)
+```
+
+## (bi) Tuning parameters
+
+```{r}
+enet_fit$bestTune
+```
+
+The best alpha (α) value using the minimum MSE rule according to the caret package is 0.65.
+The best lambda (λ) value using the minimum MSE rule according to the caret package is 7.389056.
+
+```{r}
+set.seed(1)
+
+# 10-fold cross-validation repeated 5 times using 1SE
+ctrl_1se <- trainControl(method = "repeatedcv", selection = "oneSE", number = 10, repeats = 5)
+
+enet_fit_1se <- train(x, y,
+                  method = "glmnet",
+                  tuneGrid = expand.grid(alpha = seq(0, 1, length = 21), 
+                                         lambda = exp(seq(2, -2, length = 50))),
+                  trControl = ctrl_1se)
+
+enet_fit_1se$bestTune
+```
+
+It is possible to apply the 1SE rule to select the tuning parameters by adding a selection = "oneSE" statement to the `trainControl` function. When the 1SE rule is applied, the 
+The best alpha (α) value using the 1SE rule is 0.
+The best lambda (λ) value using the 1SE rule is 7.389056.
+
+## (bii) Test error
+
+```{r}
+enet_fit_pred <- predict(enet_fit, newdata = test_data_matrix)
+
+# calculate MSE
+mean((enet_fit_pred - test_data$Sale_Price)^2)
+# calculate RMSE
+sqrt(mean((enet_fit_pred - test_data$Sale_Price)^2)) 
+```
+
+The mean-square test error (MSE) for the elastic net model is 426,357,707.
+The root-mean-square test error (RMSE) for the elastic net model is 20,648.43.
+
+
+# (d) Fit a partial least squares model on the training data
+
+```{r}
+set.seed(1)
+
+pls_fit <- train(x, y,
+                 method = "pls",
+                 tuneGrid = data.frame(ncomp = 1:19), trControl = ctrl1,
+                 preProcess = c("center", "scale"))
+```
+
+## (bi) Test error 
+
+```{r}
+pls_fit_pred <- predict(pls_fit, newdata = test_data_matrix)
+
+# calculate MSE
+mean((pls_fit_pred - test_data$Sale_Price)^2)
+# calculate RMSE
+sqrt(mean((pls_fit_pred - test_data$Sale_Price)^2)) 
+```
+
+The mean-square test error (MSE) for the partial least squares model is 440,217,938.
+The root-mean-square test error (RMSE) for the partial least squares model is 20981.37.
+
+## (bii) Model components
+
+```{r}
+ggplot(pls_fit, highlight = TRUE)
+```
+
+There are 13 components included in the model. 
+
+
+# (e) Model Comparison
+
+```{r}
+set.seed(1)
+
+resamp <- resamples(list(
+  pls = pls_fit,
+  enet = enet_fit, 
+  lasso = lasso_fit,
+  lm = lm_fit)) 
+
+summary(resamp)
+
+bwplot(resamp, metric = "RMSE")
+```
+
+The best model that I would choose for predicting the sale price of a house is the lasso model. The reason for choosing this model is because it has the lowest mean value for RMSE.
