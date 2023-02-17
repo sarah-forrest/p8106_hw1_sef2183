@@ -1,7 +1,7 @@
 ---
-title: "Homework 1: Predicting the Sale Price of a House Using Characteristics"
-author: "Sarah Forrest"
-date: "2/8/2023"
+title: "P8106 Data Science II Homework 1: Predicting the Sale Price of a House Using Characteristics"
+author: "Sarah Forrest - sef2183"
+date: "2/22/2023"
 output: github_document
 ---
 
@@ -26,21 +26,38 @@ test_data = read.csv("data/housing_test.csv")
 train_data = read.csv("data/housing_training.csv")
 ```
 
-# (a) Fit a linear model using least squares on the training data
+Create six input objects for use in the proceeding code:
+
+1. x = input matrix of predictors x for the training data using `model.matrix()`
+2. y = vector of response y for the training data
+
+3. x2 = input matrix of predictors x for the test data using `model.matrix()`
+4. y2 = vector of response y for the test data
+
+5. ctrl1 = 10-fold cross-validation repeated 5 times using `trainControl()` and the default "best" minimum MSE rule
+6. ctrl_1se = 10-fold cross-validation repeated 5 times using `trainControl()` and the 1 standard error (1SE) rule
 
 ```{r}
 set.seed(1)
 
-# create input objects
-## create input matrix of predictors x for the training data
-train_data_matrix <- model.matrix(Sale_Price ~ ., train_data)[ ,-1]
-x <- train_data_matrix
-## create vector of response y for the training data
+# training data
+x <- model.matrix(Sale_Price ~ ., train_data)[ ,-1]
 y <- train_data$Sale_Price
 
-## 10-fold cross-validation repeated 5 times
+# test data
+x2 <- model.matrix(Sale_Price ~ ., test_data)[ ,-1]
+y2 <- test_data$Sale_Price
+
+# 10-fold cross-validation repeated 5 times 
+## best rule
 ctrl1 <- trainControl(method = "repeatedcv", number = 10, repeats = 5)
+## 1SE rule
+ctrl_1se <- trainControl(method = "repeatedcv", selection = "oneSE", number = 10, repeats = 5)
 ```
+
+# (a) Fit a linear model using least squares on the training data
+
+Using the caret package: 
 
 ```{r}
 set.seed(1)
@@ -65,26 +82,25 @@ lasso_fit <- train(x, y,
                    trControl = ctrl1)
 ```
 
-## (bi) Tuning parameter (λ)
+## (bi) Tuning parameter (lambda)
 
 ```{r}
 lasso_fit$bestTune
 ```
 
-The best lambda (λ) value resulting in the minimum MSE according to the caret package is 63.53019.
+The best lambda value resulting in the minimum mean-square error (MSE) according to the caret package is 63.53019.
 
 ## (bii) Test error
 
 ```{r}
-## create input matrix of predictors x for the test data
-test_data_matrix <- model.matrix(Sale_Price ~ ., test_data)[ ,-1]
+set.seed(1)
 
-lasso_fit_pred <- predict(lasso_fit, newdata = test_data_matrix)
+lasso_fit_pred <- predict(lasso_fit, newdata = x2)
 
 # calculate MSE
-mean((lasso_fit_pred - test_data$Sale_Price)^2)
+mean((lasso_fit_pred - y2)^2)
 # calculate RMSE
-sqrt(mean((lasso_fit_pred - test_data$Sale_Price)^2)) 
+sqrt(mean((lasso_fit_pred - y2)^2)) 
 ```
 
 The mean-square test error (MSE) for the lasso model is 440,154,088.
@@ -93,8 +109,7 @@ The root-mean-square test error (RMSE) for the lasso model is 20,979.85.
 ## (biii) Predictors
 
 ```{r}
-# 10-fold cross-validation repeated 5 times using 1SE
-ctrl_1se <- trainControl(method = "repeatedcv", selection = "oneSE", number = 10, repeats = 5)
+set.seed(1)
 
 lasso_fit_1se <- train(x, y,
                    method = "glmnet",
@@ -105,7 +120,7 @@ lasso_fit_1se <- train(x, y,
 coef(lasso_fit_1se$finalModel, lasso_fit_1se$bestTune$lambda)
 ```
 
-When the 1 standard error (1SE) rule is applied, there are 36 predictors included in the model (not including the intercept). The following coefficients were removed from the model because they had values of 0: second floor square feet (Second_Flr_SF), "good" fireplace quality (Fireplace_QuNo_Fireplace), and no fireplace (Fireplace_QuNo_Fireplace )
+When the 1SE rule is applied, there are 36 predictors included in the model (not including the intercept). The following coefficients were removed from the model because they had values of 0: second floor square feet (Second_Flr_SF), "good" fireplace quality (Fireplace_QuNo_Fireplace), and no fireplace (Fireplace_QuNo_Fireplace )
 
 
 # (c) Fit an elastic net model on the training data
@@ -122,20 +137,17 @@ enet_fit <- train(x, y,
                   trControl = ctrl1)
 ```
 
-## (bi) Tuning parameters
+## (bi) Tuning parameters (alpha and lambda)
 
 ```{r}
 enet_fit$bestTune
 ```
 
-The best alpha (α) value using the minimum MSE rule according to the caret package is 0.65.
-The best lambda (λ) value using the minimum MSE rule according to the caret package is 7.389056.
+The best alpha value using the minimum MSE rule according to the caret package is 0.65.
+The best lambda value using the minimum MSE rule according to the caret package is 7.389056.
 
 ```{r}
 set.seed(1)
-
-# 10-fold cross-validation repeated 5 times using 1SE
-ctrl_1se <- trainControl(method = "repeatedcv", selection = "oneSE", number = 10, repeats = 5)
 
 enet_fit_1se <- train(x, y,
                   method = "glmnet",
@@ -147,22 +159,24 @@ enet_fit_1se$bestTune
 ```
 
 It is possible to apply the 1SE rule to select the tuning parameters by adding a selection = "oneSE" statement to the `trainControl` function. When the 1SE rule is applied, the 
-The best alpha (α) value using the 1SE rule is 0.
-The best lambda (λ) value using the 1SE rule is 7.389056.
+The best alpha value using the 1SE rule is 0.
+The best lambda value using the 1SE rule is 7.389056.
 
 ## (bii) Test error
 
 ```{r}
-enet_fit_pred <- predict(enet_fit, newdata = test_data_matrix)
+set.seed(1)
+
+enet_fit_pred <- predict(enet_fit, newdata = x2)
 
 # calculate MSE
-mean((enet_fit_pred - test_data$Sale_Price)^2)
+mean((enet_fit_pred - y2)^2)
 # calculate RMSE
-sqrt(mean((enet_fit_pred - test_data$Sale_Price)^2)) 
+sqrt(mean((enet_fit_pred - y2)^2)) 
 ```
 
-The mean-square test error (MSE) for the elastic net model is 426,357,707.
-The root-mean-square test error (RMSE) for the elastic net model is 20,648.43.
+The mean-square test error (MSE) for the elastic net model is 442,815,907.
+The root-mean-square test error (RMSE) for the elastic net model is 21,043.19.
 
 
 # (d) Fit a partial least squares model on the training data
@@ -179,16 +193,18 @@ pls_fit <- train(x, y,
 ## (bi) Test error 
 
 ```{r}
-pls_fit_pred <- predict(pls_fit, newdata = test_data_matrix)
+set.seed(1)
+
+pls_fit_pred <- predict(pls_fit, newdata = x2)
 
 # calculate MSE
-mean((pls_fit_pred - test_data$Sale_Price)^2)
+mean((pls_fit_pred - y2)^2)
 # calculate RMSE
-sqrt(mean((pls_fit_pred - test_data$Sale_Price)^2)) 
+sqrt(mean((pls_fit_pred - y2)^2)) 
 ```
 
-The mean-square test error (MSE) for the partial least squares model is 440,217,938.
-The root-mean-square test error (RMSE) for the partial least squares model is 20981.37.
+The mean-square test error (MSE) for the partial least squares model is 449,622,718.
+The root-mean-square test error (RMSE) for the partial least squares model is 21,204.31.
 
 ## (bii) Model components
 
@@ -196,7 +212,7 @@ The root-mean-square test error (RMSE) for the partial least squares model is 20
 ggplot(pls_fit, highlight = TRUE)
 ```
 
-There are 13 components included in the model. 
+There are 12 components included in the model. 
 
 
 # (e) Model Comparison
